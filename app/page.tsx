@@ -1,4 +1,4 @@
-// "use client";
+"use client";
 
 import { generateSolvedMatrix } from "@/utils/generate-matrix.util";
 

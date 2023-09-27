@@ -111,6 +111,37 @@ export const isValidRow = ({
   return isValid;
 };
 
+export const isValidBlock = ({
+  matrix,
+  cellId,
+  value,
+}: {
+  matrix: IMatrixData[];
+  cellId: string;
+  value: number;
+}) => {
+  const [first, second] = cellId.split("-");
+  const arraySecondIndex = Array(9)
+    .fill(0)
+    .map((_, index) => index + 1)
+    .filter((it) => it !== +second);
+  const arrayCellIds = arraySecondIndex.map((it) => `${first}-${it}`);
+
+  const cells = [...matrix].map((it) => it.items).flat();
+
+  let isValid = true;
+  cells.forEach((it) => {
+    if (it.value === 0) return;
+
+    if (arrayCellIds.includes(it.cellId) && it.value === value) {
+      isValid = false;
+      return;
+    }
+  });
+
+  return isValid;
+};
+
 /**
  * IDEA:
  * matrix have 81 cells and 9 blocks (count from top left => right => bottom)
@@ -123,6 +154,8 @@ export const isValidRow = ({
  *      if valid (col, row and block) => assign and remove this number from the shuffle array & remove this number to list valid on cell
  *      if invalid (col, row and block) => back to previous step and assign another number to cell
  * repeat above condition to the end.
+ *
+ * Reference: https://www.geeksforgeeks.org/program-sudoku-generator/
  */
 export const generateSolvedMatrix = () => {
   const matrix = [...initGrid];
