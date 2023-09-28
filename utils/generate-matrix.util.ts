@@ -1,203 +1,120 @@
-import { shuffle } from "lodash";
+const n = 9; // Size of the Sudoku grid (9x9)
 
-const INDEPENDENT_BLOCK = [1, 5, 9];
-const DEPENDENT_COLUMNS = [
-  [1, 4, 7],
-  [2, 5, 8],
-  [3, 6, 9],
-];
-const DEPENDENT_ROWS = [
-  [1, 2, 3],
-  [4, 5, 6],
-  [7, 8, 9],
-];
+export function generateRandomSudokuMatrix(): number[][] {
+  const matrix: number[][] = new Array(n)
+    .fill(null)
+    .map(() => new Array(n).fill(0));
 
-interface IMatrixData {
-  id: number;
-  items: {
-    cellId: string;
-    value: number;
-    notes: number[];
-  }[];
+  // Helper function to check if it's safe to place a number in a cell
+  function isSafe(row: number, col: number, num: number): boolean {
+    // Check if the number is not already present in the row and column
+    for (let i = 0; i < n; i++) {
+      if (matrix[row][i] === num || matrix[i][col] === num) {
+        return false;
+      }
+    }
+
+    // Check if the number is not already present in the 3x3 subgrid
+    const startRow = Math.floor(row / 3) * 3;
+    const startCol = Math.floor(col / 3) * 3;
+    for (let i = startRow; i < startRow + 3; i++) {
+      for (let j = startCol; j < startCol + 3; j++) {
+        if (matrix[i][j] === num) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // Helper function to generate a random permutation of numbers from 1 to 9
+  function shuffleNumbers(): number[] {
+    const numbers = [...Array(n)].map((_, index) => index + 1);
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+    }
+    return numbers;
+  }
+
+  // Fill the diagonal subgrids (3x3) with random numbers
+  for (let i = 0; i < n; i += 3) {
+    const randomPermutation = shuffleNumbers();
+    for (let j = 0; j < 3; j++) {
+      for (let k = 0; k < 3; k++) {
+        matrix[i + j][i + k] = randomPermutation[j * 3 + k];
+      }
+    }
+  }
+
+  // Fill the remaining cells of the Sudoku grid
+  function fillRemainingCells(row: number, col: number): boolean {
+    if (row === n - 1 && col === n) {
+      return true; // Sudoku is filled
+    }
+
+    if (col === n) {
+      row++;
+      col = 0;
+    }
+
+    // Skip cells that are already filled
+    if (matrix[row][col] !== 0) {
+      return fillRemainingCells(row, col + 1);
+    }
+
+    // Generate a random permutation of numbers from 1 to 9
+    const numbers = shuffleNumbers();
+
+    for (const num of numbers) {
+      if (isSafe(row, col, num)) {
+        matrix[row][col] = num;
+        if (fillRemainingCells(row, col + 1)) {
+          return true;
+        }
+        matrix[row][col] = 0; // Backtrack
+      }
+    }
+
+    return false; // No valid number can be placed
+  }
+
+  fillRemainingCells(0, 0); // Fill the remaining cells
+
+  return matrix;
 }
 
-export const initGrid: IMatrixData[] = Array(9)
-  .fill(0)
-  .map((_, index) => ({
-    id: index + 1,
-    items: Array(9)
-      .fill(0)
-      .map((_, subindex) => ({
-        cellId: `${index + 1}-${subindex + 1}`,
-        value: 0,
-        notes: [],
-      })),
-  }));
-
-export const isValidColumn = ({
-  matrix,
-  cellId,
-  value,
-}: {
-  matrix: IMatrixData[];
-  cellId: string;
-  value: number;
-}) => {
-  const [first, second] = cellId.split("-");
-  const dependentColumnFirst =
-    DEPENDENT_COLUMNS.find((dependentColumn) =>
-      dependentColumn.includes(+first)
-    ) || [];
-  const dependentColumnSecond =
-    DEPENDENT_COLUMNS.find((dependentColumn) =>
-      dependentColumn.includes(+second)
-    ) || [];
-
-  const columnCellIds = dependentColumnFirst
-    .map((tempFirst) =>
-      dependentColumnSecond.map((tempSecond) => `${tempFirst}-${tempSecond}`)
-    )
-    .flat()
-    .filter((tempCellId) => tempCellId !== cellId);
-
-  const cells = [...matrix].map((it) => it.items).flat();
-
-  let isValid = true;
-  cells.forEach((it) => {
-    if (it.value === 0) return;
-
-    if (columnCellIds.includes(it.cellId) && it.value === value) {
-      isValid = false;
-      return;
-    }
-  });
-
-  return isValid;
-};
-
-export const isValidRow = ({
-  matrix,
-  cellId,
-  value,
-}: {
-  matrix: IMatrixData[];
-  cellId: string;
-  value: number;
-}) => {
-  const [first, second] = cellId.split("-");
-  const dependentRowFirst =
-    DEPENDENT_ROWS.find((dependentRow) => dependentRow.includes(+first)) || [];
-  const dependentRowSecond =
-    DEPENDENT_ROWS.find((dependentRow) => dependentRow.includes(+second)) || [];
-  const rowCellIds = dependentRowFirst
-    .map((tempFirst) =>
-      dependentRowSecond.map((tempSecond) => `${tempFirst}-${tempSecond}`)
-    )
-    .flat()
-    .filter((tempCellId) => tempCellId !== cellId);
-
-  const cells = [...matrix].map((it) => it.items).flat();
-
-  let isValid = true;
-  cells.forEach((it) => {
-    if (it.value === 0) return;
-
-    if (rowCellIds.includes(it.cellId) && it.value === value) {
-      isValid = false;
-      return;
-    }
-  });
-
-  return isValid;
-};
-
-export const isValidBlock = ({
-  matrix,
-  cellId,
-  value,
-}: {
-  matrix: IMatrixData[];
-  cellId: string;
-  value: number;
-}) => {
-  const [first, second] = cellId.split("-");
-  const arraySecondIndex = Array(9)
-    .fill(0)
-    .map((_, index) => index + 1)
-    .filter((it) => it !== +second);
-  const arrayCellIds = arraySecondIndex.map((it) => `${first}-${it}`);
-
-  const cells = [...matrix].map((it) => it.items).flat();
-
-  let isValid = true;
-  cells.forEach((it) => {
-    if (it.value === 0) return;
-
-    if (arrayCellIds.includes(it.cellId) && it.value === value) {
-      isValid = false;
-      return;
-    }
-  });
-
-  return isValid;
-};
-
-/**
- * IDEA:
- * matrix have 81 cells and 9 blocks (count from top left => right => bottom)
- * Step 1: Create independent cells in block [1 5 9]
- * Step 2: Create a array shuffle 1 to 9 and use BACKTRACKING algorithm to assign cells of each block
- * Step 3: Repeat on each next block and fill all cells with shuffle numbers 1 to 9
- *
- * BACKTRACKING algorithm:
- * assign number to cell,
- *      if valid (col, row and block) => assign and remove this number from the shuffle array & remove this number to list valid on cell
- *      if invalid (col, row and block) => back to previous step and assign another number to cell
- * repeat above condition to the end.
- *
- * Reference: https://www.geeksforgeeks.org/program-sudoku-generator/
- */
-export const generateSolvedMatrix = () => {
-  const matrix = [...initGrid];
-  const array1to9 = Array(9)
-    .fill(0)
-    .map((_, index) => index + 1);
-
-  // generate independent rows & columns in matrix (block 1,5,9)
-  matrix.map(({ id, items }) => {
-    if (!INDEPENDENT_BLOCK.includes(id)) return;
-
-    const shuffle1to9 = shuffle(array1to9);
-    items.map((item, index) => {
-      item.value = shuffle1to9[index];
-    });
-  });
-
-  // generate notes allowable to cells in matrix based on the INDEPENDENT_BLOCK above
-  matrix.map(({ id, items }) => {
-    if (INDEPENDENT_BLOCK.includes(id)) return;
-
-    let shuffle1to9 = shuffle(array1to9);
-
-    items.map((item) => {
-      const validValues = shuffle1to9.filter((it) => {
-        return (
-          isValidColumn({
-            matrix: [...matrix],
-            cellId: item.cellId,
-            value: it,
-          }) &&
-          isValidRow({ matrix: [...matrix], cellId: item.cellId, value: it })
-        );
-      });
-
-      if (!validValues) {
-        alert("ERROR!!!!!!!!!!!!!!!!!!!!!!!!");
-        return;
+// Remove cells to create an extreme Sudoku puzzle
+export const removeExtremeMode = (matrix: number[][]) => {
+  const numberOfEmptyCells = Math.floor(Math.random() * 5) + 50;
+  for (let i = 0; i < numberOfEmptyCells; i++) {
+    while (true) {
+      const row = Math.floor(Math.random() * n);
+      const col = Math.floor(Math.random() * n);
+      if (matrix[row][col] !== 0) {
+        matrix[row][col] = 0;
+        break;
       }
-      item.notes = validValues;
-    });
-  });
+    }
+  }
 
   return matrix;
 };
+
+export interface IMappingMatrix {
+  value: number;
+  notes: number[];
+  isNoting: boolean;
+  isDefault: boolean;
+}
+
+export const mappingMatrix = (matrix: number[][]): IMappingMatrix[][] =>
+  matrix.map((items) =>
+    items.map((item) => ({
+      value: item,
+      notes: [],
+      isNoting: false,
+      isDefault: !!(item !== 0),
+    }))
+  );
